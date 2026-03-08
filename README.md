@@ -68,6 +68,18 @@ cli/
 Shared MCP mapping reference:
 - `docs/mcp-tool-map.md`
 
+## Skills Mode (Synced To MCP Source)
+
+This repo's MCP-related skills are synced against:
+- `~/Max/research-warehouse/docs/query-guide.md`
+- `~/Max/research-warehouse/docs/mcp-response-contract.md`
+
+When MCP source changes, update skill routing by this order:
+1. Query guide (tool names + parameters)
+2. Response contract (`quality/errors/source`)
+3. `docs/mcp-tool-map.md`
+4. `skills/mcp-query-router/SKILL.md` and `skills/mcp-query-playbook/SKILL.md`
+
 ## Go CLI (`rw`) For MCP Calls
 
 Location:

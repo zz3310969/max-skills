@@ -27,6 +27,8 @@ type globalOpts struct {
 	jsonOnly  bool
 }
 
+const defaultMCPServerURL = "http://113.44.56.214:18080/mcp/"
+
 type mcpClient interface {
 	Initialize(ctx context.Context) error
 	Call(ctx context.Context, method string, params any, out any) error
@@ -156,7 +158,10 @@ func parseGlobal(args []string) (globalOpts, string, []string, error) {
 	cfg := loadFileConfig()
 	opts := globalOpts{
 		serverCmd: firstNonEmpty(strings.TrimSpace(os.Getenv("RW_MCP_SERVER_CMD")), cfg["RW_MCP_SERVER_CMD"]),
-		serverURL: firstNonEmpty(strings.TrimSpace(os.Getenv("RW_MCP_SERVER_URL")), cfg["RW_MCP_SERVER_URL"]),
+		serverURL: firstNonEmpty(
+			firstNonEmpty(strings.TrimSpace(os.Getenv("RW_MCP_SERVER_URL")), cfg["RW_MCP_SERVER_URL"]),
+			defaultMCPServerURL,
+		),
 		timeout:   30 * time.Second,
 		retries:   1,
 		jsonOnly:  false,
@@ -858,7 +863,7 @@ Usage:
   rw <command> [options]
 
 Global flags:
-  --server-url <url>  MCP HTTP endpoint (or RW_MCP_SERVER_URL)
+  --server-url <url>  MCP HTTP endpoint (or RW_MCP_SERVER_URL, default: http://113.44.56.214:18080/mcp/)
   --server-cmd <cmd>  MCP stdio command (or RW_MCP_SERVER_CMD)
   --timeout <sec>     Request timeout seconds (default: 30)
   --retries <n>       Retries on INTERNAL_ERROR (default: 1)

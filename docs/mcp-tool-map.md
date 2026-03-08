@@ -1,6 +1,7 @@
 # MCP Tool Map (Shared)
 
 This shared map is referenced by `mcp-query-router` and `mcp-query-playbook`.
+Source of truth: `~/Max/research-warehouse/docs/query-guide.md`.
 
 ## Schema
 
@@ -30,8 +31,8 @@ Each tool mapping should include:
 
 ### `query_supply_chain`
 - `intent_tags`: supply-chain, transmission, exposure
-- `required_params`: ticker
-- `optional_params`: depth
+- `required_params`: entity
+- `optional_params`: direction, max_depth
 - `key_fields_for_quality`: upstream, downstream, active_signals
 - `fallback_on_partial`: query_company, query_bottleneck
 - `fallback_on_error`: query_company
@@ -40,8 +41,8 @@ Each tool mapping should include:
 
 ### `query_bottleneck`
 - `intent_tags`: bottleneck, chokepoint, material-risk
-- `required_params`: industry or ticker context
-- `optional_params`: region
+- `required_params`: domain
+- `optional_params`: none
 - `key_fields_for_quality`: key_companies, material_trends, active_signals
 - `fallback_on_partial`: query_supply_chain
 - `fallback_on_error`: query_macro
@@ -50,8 +51,8 @@ Each tool mapping should include:
 
 ### `query_macro`
 - `intent_tags`: macro, regime, risk
-- `required_params`: macro scope or default
-- `optional_params`: timeframe
+- `required_params`: none
+- `optional_params`: days
 - `key_fields_for_quality`: indicators, macro_signals
 - `fallback_on_partial`: search_semantic
 - `fallback_on_error`: query_technicals
@@ -60,8 +61,8 @@ Each tool mapping should include:
 
 ### `search_companies`
 - `intent_tags`: discovery, screening
-- `required_params`: query
-- `optional_params`: sector, region
+- `required_params`: none
+- `optional_params`: sector, tier, min_cap, max_cap, country
 - `key_fields_for_quality`: companies
 - `fallback_on_partial`: query_company
 - `fallback_on_error`: none
@@ -71,7 +72,7 @@ Each tool mapping should include:
 ### `search_semantic`
 - `intent_tags`: semantic, narrative, thesis-check
 - `required_params`: query
-- `optional_params`: ticker, date range
+- `optional_params`: limit, source_filter
 - `key_fields_for_quality`: research_reports, expert_posts
 - `fallback_on_partial`: get_research_reports
 - `fallback_on_error`: query_company
@@ -81,7 +82,7 @@ Each tool mapping should include:
 ### `get_earnings_call`
 - `intent_tags`: earnings, management-guidance
 - `required_params`: ticker
-- `optional_params`: quarter, year
+- `optional_params`: quarter
 - `key_fields_for_quality`: ticker, transcript_preview
 - `fallback_on_partial`: query_options_flow
 - `fallback_on_error`: get_research_reports
@@ -90,8 +91,8 @@ Each tool mapping should include:
 
 ### `get_research_reports`
 - `intent_tags`: reports, consensus, thesis
-- `required_params`: ticker or query
-- `optional_params`: date range
+- `required_params`: none
+- `optional_params`: ticker, topic, source, limit
 - `key_fields_for_quality`: reports
 - `fallback_on_partial`: search_semantic
 - `fallback_on_error`: query_company
@@ -101,7 +102,7 @@ Each tool mapping should include:
 ### `query_options_flow`
 - `intent_tags`: options, sentiment, positioning
 - `required_params`: ticker
-- `optional_params`: lookback
+- `optional_params`: days
 - `key_fields_for_quality`: latest_snapshot, flow_history, unusual_contracts
 - `fallback_on_partial`: query_etf_flow, query_technicals
 - `fallback_on_error`: query_technicals
@@ -111,7 +112,7 @@ Each tool mapping should include:
 ### `query_etf_flow`
 - `intent_tags`: etf, fund-flow, positioning
 - `required_params`: none
-- `optional_params`: ticker
+- `optional_params`: ticker, weeks
 - `key_fields_for_quality`: aum_history, latest_holdings, etf_flow_radar
 - `fallback_on_partial`: query_options_flow
 - `fallback_on_error`: query_macro
@@ -121,10 +122,9 @@ Each tool mapping should include:
 ### `query_technicals`
 - `intent_tags`: technicals, trend, momentum
 - `required_params`: ticker
-- `optional_params`: timeframe
+- `optional_params`: days
 - `key_fields_for_quality`: latest_technicals, history
 - `fallback_on_partial`: query_options_flow
 - `fallback_on_error`: query_company
 - `evidence_fields`: latest_technicals, history
 - `financial_caveats`: technical patterns have regime sensitivity
-

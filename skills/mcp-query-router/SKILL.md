@@ -7,6 +7,7 @@ description: "金融数据查询总路由，负责选工具、组参、调用与
 
 ## Purpose
 Route financial research requests to the right MCP tools, validate parameters, and build a minimal query plan.
+This skill follows **query-guide-first mode**: parameter schema must match `~/Max/research-warehouse/docs/query-guide.md`.
 
 This skill focuses on query orchestration:
 - What to query
@@ -37,38 +38,38 @@ Map user requests to one of these domains:
 ### 2) Macro and risk regime
 - Primary: `query_macro`
 - Fallback: `search_semantic`
-- Required params: macro topic or default preset
-- Optional params: date window, market context
+- Required params: none
+- Optional params: `days`
 
 ### 3) Research and semantic lookup
 - Primary: `search_semantic`
 - Fallback: `get_research_reports`
 - Required params: `query`
-- Optional params: `ticker`, date range, source preference
+- Optional params: `limit`, `source_filter`
 
 ### 4) Earnings event and transcript context
 - Primary: `get_earnings_call`
 - Fallback: `query_options_flow`, `query_technicals`
 - Required params: `ticker`
-- Optional params: quarter, year
+- Optional params: `quarter`
 
 ### 5) Flow and positioning
 - Primary: `query_options_flow` or `query_etf_flow`
 - Fallback: the other flow tool, then `query_technicals`
 - Required params: `ticker` for single-name flow; optional for radar mode
-- Optional params: lookback windows
+- Optional params: `days` (options), `weeks` (ETF)
 
 ### 6) Technicals and trend structure
 - Primary: `query_technicals`
 - Fallback: `query_options_flow`, `query_macro`
 - Required params: `ticker`
-- Optional params: timeframe
+- Optional params: `days`
 
 ### 7) Company discovery and screening
 - Primary: `search_companies`
 - Fallback: `query_company`
-- Required params: search string or filters
-- Optional params: sector, region
+- Required params: none
+- Optional params: `sector`, `tier`, `min_cap`, `max_cap`, `country`
 
 ## Parameter Precheck
 Before calling MCP:
@@ -77,6 +78,11 @@ Before calling MCP:
 2. Validate enum-like inputs (timeframe, mode, range).
 3. Normalize ticker casing (`upper()` convention).
 4. If invalid or missing, ask for parameter correction before calling.
+
+Enum guards (strict):
+- `query_supply_chain.direction`: `upstream | downstream | both`
+- `query_bottleneck.domain`: `memory | photonics | packaging | power | gpu`
+- `search_companies.tier`: `chokepoint | enabler | beneficiary`
 
 If precheck fails, do not call MCP; avoid predictable `INVALID_ARGUMENT`.
 
@@ -148,6 +154,11 @@ rw semantic --query "CoWoS capacity expansion 2026" --limit 5
 - Generic direct call:
 ```bash
 rw call --tool query_company --args '{"ticker":"NVDA"}'
+```
+
+- ETF flow radar:
+```bash
+rw etf --weeks 8
 ```
 
 ## Execution Notes
