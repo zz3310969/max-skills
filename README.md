@@ -42,6 +42,35 @@ If you only have local stdio server:
 rw setup --server-cmd "node /path/to/mcp_server/server.js"
 ```
 
+## OpenClaw Skill Install
+
+Install skills directly into OpenClaw (similar to jina-cli style):
+
+Install all skills:
+
+```bash
+mkdir -p ~/.openclaw/workspace/skills
+for s in mcp-query-playbook mcp-query-router mcp-result-interpreter research-summary; do
+  mkdir -p ~/.openclaw/workspace/skills/$s
+  curl -fsSL https://raw.githubusercontent.com/zz3310969/max-skills/main/skills/$s/SKILL.md \
+    -o ~/.openclaw/workspace/skills/$s/SKILL.md
+done
+```
+
+Install one skill:
+
+```bash
+mkdir -p ~/.openclaw/workspace/skills/mcp-query-router
+curl -fsSL https://raw.githubusercontent.com/zz3310969/max-skills/main/skills/mcp-query-router/SKILL.md \
+  -o ~/.openclaw/workspace/skills/mcp-query-router/SKILL.md
+```
+
+For MCP querying skills, also install `rw`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/zz3310969/max-skills/main/scripts/install-rw.sh | bash
+```
+
 ## Repository Structure
 
 ```text
@@ -70,9 +99,9 @@ Shared MCP mapping reference:
 
 ## Skills Mode (Synced To MCP Source)
 
-This repo's MCP-related skills are synced against:
-- `~/Max/research-warehouse/docs/query-guide.md`
-- `~/Max/research-warehouse/docs/mcp-response-contract.md`
+This repo's MCP-related skills are synced against your MCP server docs:
+- query guide (tool names + parameters)
+- response contract (`quality/errors/source`)
 
 When MCP source changes, update skill routing by this order:
 1. Query guide (tool names + parameters)

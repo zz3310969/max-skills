@@ -7,7 +7,7 @@ description: "金融数据查询总路由，负责选工具、组参、调用与
 
 ## Purpose
 Route financial research requests to the right MCP tools, validate parameters, and build a minimal query plan.
-This skill follows **query-guide-first mode**: parameter schema must match `~/Max/research-warehouse/docs/query-guide.md`.
+This skill follows **query-guide-first mode**: parameter schema must match your MCP server query guide.
 
 This skill focuses on query orchestration:
 - What to query
@@ -15,6 +15,20 @@ This skill focuses on query orchestration:
 - When to run fallback queries
 
 It does not produce final user-facing conclusions by itself.
+
+## Prerequisites
+1. Install `rw` CLI:
+```bash
+curl -fsSL https://raw.githubusercontent.com/zz3310969/max-skills/main/scripts/install-rw.sh | bash
+```
+2. Configure MCP endpoint:
+```bash
+rw setup --server-url https://your-mcp-gateway.example.com
+rw doctor
+```
+3. Keep tool/param mapping aligned with:
+- your MCP query guide
+- `docs/mcp-tool-map.md` in this repository
 
 ## Intent Classification
 Map user requests to one of these domains:

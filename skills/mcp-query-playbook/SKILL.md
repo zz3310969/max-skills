@@ -7,7 +7,7 @@ description: "金融问题到 MCP 查询路径的操作手册（主查/补查/�
 
 ## Purpose
 Provide reusable financial query playbooks so the router can execute consistent, auditable query chains.
-Tool selection and parameters must follow `~/Max/research-warehouse/docs/query-guide.md`.
+Tool selection and parameters must follow your MCP server query guide.
 
 Each playbook defines:
 - `question_pattern`
@@ -15,6 +15,20 @@ Each playbook defines:
 - `confirmatory_tool`
 - `stop_condition`
 - `output_focus`
+
+## Prerequisites
+1. Install `rw` CLI:
+```bash
+curl -fsSL https://raw.githubusercontent.com/zz3310969/max-skills/main/scripts/install-rw.sh | bash
+```
+2. Configure MCP endpoint:
+```bash
+rw setup --server-url https://your-mcp-gateway.example.com
+rw doctor
+```
+3. Keep tool/param mapping aligned with:
+- your MCP query guide
+- `docs/mcp-tool-map.md` in this repository
 
 ## Core Playbooks
 
