@@ -33,7 +33,7 @@ rw doctor
 Stdio mode:
 
 ```bash
-rw setup --server-cmd "python /path/to/mcp_server/server.py"
+rw setup --server-cmd "node /path/to/mcp_server/server.js"
 rw doctor
 ```
 

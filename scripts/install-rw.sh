@@ -39,6 +39,6 @@ echo
 echo "Next:"
 echo "  rw setup --server-url <your-mcp-http-endpoint>"
 echo "  # or"
-echo "  rw setup --server-cmd 'python /path/to/mcp_server/server.py'"
+echo "  rw setup --server-cmd 'node /path/to/mcp_server/server.js'"
 echo "  rw doctor"
 echo "  rw tools"

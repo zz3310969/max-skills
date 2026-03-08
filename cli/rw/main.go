@@ -853,7 +853,7 @@ func printHelp() {
 
 Usage:
   rw setup --server-url <url>
-  rw setup --server-cmd "python /path/to/server.py"
+  rw setup --server-cmd "node /path/to/server.js"
   rw doctor
   rw <command> [options]
 

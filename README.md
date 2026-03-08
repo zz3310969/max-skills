@@ -39,7 +39,7 @@ rw semantic --query "CoWoS capacity expansion 2026" --limit 5
 If you only have local stdio server:
 
 ```bash
-rw setup --server-cmd "python /path/to/mcp_server/server.py"
+rw setup --server-cmd "node /path/to/mcp_server/server.js"
 ```
 
 ## Repository Structure
