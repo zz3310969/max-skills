@@ -10,8 +10,10 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -19,16 +21,29 @@ import (
 
 type globalOpts struct {
 	serverCmd string
+	serverURL string
 	timeout   time.Duration
 	retries   int
 	jsonOnly  bool
 }
 
-type rpcClient struct {
+type mcpClient interface {
+	Initialize(ctx context.Context) error
+	Call(ctx context.Context, method string, params any, out any) error
+	Close() error
+}
+
+type stdioClient struct {
 	cmd    *exec.Cmd
 	stdin  io.WriteCloser
 	stdout *bufio.Reader
 	stderr *bytes.Buffer
+	nextID int64
+}
+
+type httpClient struct {
+	url    string
+	client *http.Client
 	nextID int64
 }
 
@@ -83,11 +98,19 @@ func main() {
 		printHelp()
 		return
 	}
+	if cmd == "setup" {
+		exitIfErr(runSetup(args))
+		return
+	}
+	if cmd == "doctor" {
+		exitIfErr(runDoctor(opts))
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), opts.timeout)
 	defer cancel()
 
-	client, err := newRPCClient(ctx, opts.serverCmd)
+	client, err := newClient(ctx, opts)
 	if err != nil {
 		exitErr(err)
 	}
@@ -130,8 +153,10 @@ func main() {
 }
 
 func parseGlobal(args []string) (globalOpts, string, []string, error) {
+	cfg := loadFileConfig()
 	opts := globalOpts{
-		serverCmd: strings.TrimSpace(os.Getenv("RW_MCP_SERVER_CMD")),
+		serverCmd: firstNonEmpty(strings.TrimSpace(os.Getenv("RW_MCP_SERVER_CMD")), cfg["RW_MCP_SERVER_CMD"]),
+		serverURL: firstNonEmpty(strings.TrimSpace(os.Getenv("RW_MCP_SERVER_URL")), cfg["RW_MCP_SERVER_URL"]),
 		timeout:   30 * time.Second,
 		retries:   1,
 		jsonOnly:  false,
@@ -146,6 +171,12 @@ func parseGlobal(args []string) (globalOpts, string, []string, error) {
 				return opts, "", nil, errors.New("missing value for --server-cmd")
 			}
 			opts.serverCmd = strings.TrimSpace(args[i+1])
+			i++
+		case "--server-url":
+			if i+1 >= len(args) {
+				return opts, "", nil, errors.New("missing value for --server-url")
+			}
+			opts.serverURL = strings.TrimSpace(args[i+1])
 			i++
 		case "--timeout":
 			if i+1 >= len(args) {
@@ -177,16 +208,64 @@ func parseGlobal(args []string) (globalOpts, string, []string, error) {
 	if len(rest) == 0 {
 		return opts, "", nil, nil
 	}
-	if rest[0] == "help" || rest[0] == "--help" || rest[0] == "-h" {
+	if rest[0] == "help" || rest[0] == "--help" || rest[0] == "-h" || rest[0] == "setup" || rest[0] == "doctor" {
 		return opts, rest[0], rest[1:], nil
 	}
-	if opts.serverCmd == "" {
-		return opts, "", nil, errors.New("missing MCP server command, set --server-cmd or RW_MCP_SERVER_CMD")
+	if opts.serverCmd == "" && opts.serverURL == "" {
+		return opts, "", nil, errors.New("missing MCP server config, set --server-url or --server-cmd (or RW_MCP_SERVER_URL/RW_MCP_SERVER_CMD)")
+	}
+	if opts.serverCmd != "" && opts.serverURL != "" {
+		return opts, "", nil, errors.New("set only one transport: --server-url or --server-cmd")
 	}
 	return opts, rest[0], rest[1:], nil
 }
 
-func newRPCClient(ctx context.Context, serverCmd string) (*rpcClient, error) {
+func loadFileConfig() map[string]string {
+	cfg := map[string]string{}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return cfg
+	}
+	p := filepath.Join(home, ".config", "rw", "config.env")
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return cfg
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		kv := strings.SplitN(line, "=", 2)
+		if len(kv) != 2 {
+			continue
+		}
+		cfg[strings.TrimSpace(kv[0])] = strings.Trim(strings.TrimSpace(kv[1]), `"`)
+	}
+	return cfg
+}
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}
+
+func newClient(ctx context.Context, opts globalOpts) (mcpClient, error) {
+	if opts.serverURL != "" {
+		return &httpClient{
+			url: strings.TrimRight(opts.serverURL, "/"),
+			client: &http.Client{
+				Timeout: opts.timeout,
+			},
+			nextID: 1,
+		}, nil
+	}
+	return newStdioClient(ctx, opts.serverCmd)
+}
+
+func newStdioClient(ctx context.Context, serverCmd string) (*stdioClient, error) {
 	cmd := exec.CommandContext(ctx, "/bin/sh", "-lc", serverCmd)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -202,7 +281,7 @@ func newRPCClient(ctx context.Context, serverCmd string) (*rpcClient, error) {
 		return nil, fmt.Errorf("start server failed: %w", err)
 	}
 
-	c := &rpcClient{
+	c := &stdioClient{
 		cmd:    cmd,
 		stdin:  stdin,
 		stdout: bufio.NewReader(stdout),
@@ -212,18 +291,21 @@ func newRPCClient(ctx context.Context, serverCmd string) (*rpcClient, error) {
 	return c, nil
 }
 
-func (c *rpcClient) Close() error {
+func (c *stdioClient) Close() error {
 	_ = c.stdin.Close()
-	return c.cmd.Process.Kill()
+	if c.cmd.Process != nil {
+		_ = c.cmd.Process.Kill()
+	}
+	return nil
 }
 
-func (c *rpcClient) Initialize(ctx context.Context) error {
+func (c *stdioClient) Initialize(ctx context.Context) error {
 	params := map[string]any{
 		"protocolVersion": "2024-11-05",
 		"capabilities":    map[string]any{},
 		"clientInfo": map[string]any{
 			"name":    "rw-cli",
-			"version": "0.1.0",
+			"version": "0.2.0",
 		},
 	}
 	var initResult map[string]any
@@ -233,7 +315,7 @@ func (c *rpcClient) Initialize(ctx context.Context) error {
 	return c.Notify(ctx, "notifications/initialized", map[string]any{})
 }
 
-func (c *rpcClient) Notify(ctx context.Context, method string, params any) error {
+func (c *stdioClient) Notify(_ context.Context, method string, params any) error {
 	req := map[string]any{
 		"jsonrpc": "2.0",
 		"method":  method,
@@ -242,7 +324,7 @@ func (c *rpcClient) Notify(ctx context.Context, method string, params any) error
 	return c.writeMessage(req)
 }
 
-func (c *rpcClient) Call(ctx context.Context, method string, params any, out any) error {
+func (c *stdioClient) Call(ctx context.Context, method string, params any, out any) error {
 	id := c.nextID
 	c.nextID++
 	req := map[string]any{
@@ -280,7 +362,7 @@ func (c *rpcClient) Call(ctx context.Context, method string, params any, out any
 	}
 }
 
-func (c *rpcClient) writeMessage(msg any) error {
+func (c *stdioClient) writeMessage(msg any) error {
 	body, err := json.Marshal(msg)
 	if err != nil {
 		return err
@@ -293,7 +375,7 @@ func (c *rpcClient) writeMessage(msg any) error {
 	return err
 }
 
-func (c *rpcClient) readMessage() (*rpcResponse, error) {
+func (c *stdioClient) readMessage() (*rpcResponse, error) {
 	contentLength := 0
 	for {
 		line, err := c.stdout.ReadString('\n')
@@ -308,10 +390,7 @@ func (c *rpcClient) readMessage() (*rpcResponse, error) {
 			break
 		}
 		if strings.HasPrefix(strings.ToLower(line), "content-length:") {
-			v := strings.TrimSpace(strings.TrimPrefix(line, "Content-Length:"))
-			if v == line {
-				v = strings.TrimSpace(strings.TrimPrefix(strings.ToLower(line), "content-length:"))
-			}
+			v := strings.TrimSpace(strings.TrimPrefix(strings.ToLower(line), "content-length:"))
 			n, err := strconv.Atoi(v)
 			if err != nil {
 				return nil, fmt.Errorf("bad content-length: %q", v)
@@ -333,7 +412,84 @@ func (c *rpcClient) readMessage() (*rpcResponse, error) {
 	return &resp, nil
 }
 
-func runTools(ctx context.Context, c *rpcClient) error {
+func (h *httpClient) Initialize(ctx context.Context) error {
+	params := map[string]any{
+		"protocolVersion": "2024-11-05",
+		"capabilities":    map[string]any{},
+		"clientInfo": map[string]any{
+			"name":    "rw-cli",
+			"version": "0.2.0",
+		},
+	}
+	var initResult map[string]any
+	if err := h.Call(ctx, "initialize", params, &initResult); err != nil {
+		return err
+	}
+	// some HTTP MCP gateways ignore notifications; treat failure as non-fatal
+	_ = h.notify(ctx, "notifications/initialized", map[string]any{})
+	return nil
+}
+
+func (h *httpClient) Close() error { return nil }
+
+func (h *httpClient) Call(ctx context.Context, method string, params any, out any) error {
+	id := h.nextID
+	h.nextID++
+	reqBody := map[string]any{
+		"jsonrpc": "2.0",
+		"id":      id,
+		"method":  method,
+		"params":  params,
+	}
+	resp, err := h.post(ctx, reqBody)
+	if err != nil {
+		return err
+	}
+	if resp.Error != nil {
+		return fmt.Errorf("rpc error %d: %s", resp.Error.Code, resp.Error.Message)
+	}
+	if out == nil {
+		return nil
+	}
+	return json.Unmarshal(resp.Result, out)
+}
+
+func (h *httpClient) notify(ctx context.Context, method string, params any) error {
+	_, err := h.post(ctx, map[string]any{
+		"jsonrpc": "2.0",
+		"method":  method,
+		"params":  params,
+	})
+	return err
+}
+
+func (h *httpClient) post(ctx context.Context, payload any) (*rpcResponse, error) {
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.url, bytes.NewReader(b))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	res, err := h.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(res.Body, 2048))
+		return nil, fmt.Errorf("http %d: %s", res.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var r rpcResponse
+	if err := json.NewDecoder(res.Body).Decode(&r); err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
+func runTools(ctx context.Context, c mcpClient) error {
 	var list mcpToolsList
 	if err := c.Call(ctx, "tools/list", map[string]any{}, &list); err != nil {
 		return err
@@ -347,7 +503,7 @@ func runTools(ctx context.Context, c *rpcClient) error {
 	return nil
 }
 
-func runCall(ctx context.Context, c *rpcClient, opts globalOpts, args []string) error {
+func runCall(ctx context.Context, c mcpClient, opts globalOpts, args []string) error {
 	fs := flag.NewFlagSet("call", flag.ContinueOnError)
 	tool := fs.String("tool", "", "MCP tool name")
 	argsJSON := fs.String("args", "{}", "JSON object arguments")
@@ -355,13 +511,11 @@ func runCall(ctx context.Context, c *rpcClient, opts globalOpts, args []string) 
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *tool == "" {
-		if fs.NArg() > 0 {
-			*tool = fs.Arg(0)
-		}
+	if *tool == "" && fs.NArg() > 0 {
+		*tool = fs.Arg(0)
 	}
 	if *tool == "" {
-		return errors.New("missing tool name, use rw call --tool query_company --args '{\"ticker\":\"NVDA\"}'")
+		return errors.New("missing tool name")
 	}
 	var params map[string]any
 	if err := json.Unmarshal([]byte(*argsJSON), &params); err != nil {
@@ -370,9 +524,9 @@ func runCall(ctx context.Context, c *rpcClient, opts globalOpts, args []string) 
 	return callAndPrint(ctx, c, opts, *tool, params)
 }
 
-func runCompany(ctx context.Context, c *rpcClient, opts globalOpts, args []string) error {
+func runCompany(ctx context.Context, c mcpClient, opts globalOpts, args []string) error {
 	fs := flag.NewFlagSet("company", flag.ContinueOnError)
-	ticker := fs.String("ticker", "", "Stock ticker, e.g. NVDA")
+	ticker := fs.String("ticker", "", "Stock ticker")
 	fs.SetOutput(io.Discard)
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -383,7 +537,7 @@ func runCompany(ctx context.Context, c *rpcClient, opts globalOpts, args []strin
 	return callAndPrint(ctx, c, opts, "query_company", map[string]any{"ticker": strings.ToUpper(strings.TrimSpace(*ticker))})
 }
 
-func runChain(ctx context.Context, c *rpcClient, opts globalOpts, args []string) error {
+func runChain(ctx context.Context, c mcpClient, opts globalOpts, args []string) error {
 	fs := flag.NewFlagSet("chain", flag.ContinueOnError)
 	entity := fs.String("entity", "", "Ticker or material")
 	direction := fs.String("direction", "both", "upstream|downstream|both")
@@ -402,7 +556,7 @@ func runChain(ctx context.Context, c *rpcClient, opts globalOpts, args []string)
 	})
 }
 
-func runBottleneck(ctx context.Context, c *rpcClient, opts globalOpts, args []string) error {
+func runBottleneck(ctx context.Context, c mcpClient, opts globalOpts, args []string) error {
 	fs := flag.NewFlagSet("bottleneck", flag.ContinueOnError)
 	domain := fs.String("domain", "", "memory|photonics|packaging|power|gpu")
 	fs.SetOutput(io.Discard)
@@ -415,7 +569,7 @@ func runBottleneck(ctx context.Context, c *rpcClient, opts globalOpts, args []st
 	return callAndPrint(ctx, c, opts, "query_bottleneck", map[string]any{"domain": strings.TrimSpace(*domain)})
 }
 
-func runMacro(ctx context.Context, c *rpcClient, opts globalOpts, args []string) error {
+func runMacro(ctx context.Context, c mcpClient, opts globalOpts, args []string) error {
 	fs := flag.NewFlagSet("macro", flag.ContinueOnError)
 	days := fs.Int("days", 30, "Lookback days")
 	fs.SetOutput(io.Discard)
@@ -425,7 +579,7 @@ func runMacro(ctx context.Context, c *rpcClient, opts globalOpts, args []string)
 	return callAndPrint(ctx, c, opts, "query_macro", map[string]any{"days": *days})
 }
 
-func runSearchCompanies(ctx context.Context, c *rpcClient, opts globalOpts, args []string) error {
+func runSearchCompanies(ctx context.Context, c mcpClient, opts globalOpts, args []string) error {
 	fs := flag.NewFlagSet("search", flag.ContinueOnError)
 	sector := fs.String("sector", "", "Sector filter")
 	tier := fs.String("tier", "", "chokepoint|enabler|beneficiary")
@@ -455,7 +609,7 @@ func runSearchCompanies(ctx context.Context, c *rpcClient, opts globalOpts, args
 	return callAndPrint(ctx, c, opts, "search_companies", params)
 }
 
-func runSemantic(ctx context.Context, c *rpcClient, opts globalOpts, args []string) error {
+func runSemantic(ctx context.Context, c mcpClient, opts globalOpts, args []string) error {
 	fs := flag.NewFlagSet("semantic", flag.ContinueOnError)
 	query := fs.String("query", "", "Natural language query")
 	limit := fs.Int("limit", 5, "Top N")
@@ -474,7 +628,7 @@ func runSemantic(ctx context.Context, c *rpcClient, opts globalOpts, args []stri
 	return callAndPrint(ctx, c, opts, "search_semantic", params)
 }
 
-func runEarnings(ctx context.Context, c *rpcClient, opts globalOpts, args []string) error {
+func runEarnings(ctx context.Context, c mcpClient, opts globalOpts, args []string) error {
 	fs := flag.NewFlagSet("earnings", flag.ContinueOnError)
 	ticker := fs.String("ticker", "", "Ticker")
 	quarter := fs.String("quarter", "", "Quarter e.g. Q4-2025")
@@ -492,7 +646,7 @@ func runEarnings(ctx context.Context, c *rpcClient, opts globalOpts, args []stri
 	return callAndPrint(ctx, c, opts, "get_earnings_call", params)
 }
 
-func runReports(ctx context.Context, c *rpcClient, opts globalOpts, args []string) error {
+func runReports(ctx context.Context, c mcpClient, opts globalOpts, args []string) error {
 	fs := flag.NewFlagSet("reports", flag.ContinueOnError)
 	ticker := fs.String("ticker", "", "Ticker")
 	topic := fs.String("topic", "", "Topic keyword")
@@ -519,7 +673,7 @@ func runReports(ctx context.Context, c *rpcClient, opts globalOpts, args []strin
 	return callAndPrint(ctx, c, opts, "get_research_reports", params)
 }
 
-func runOptions(ctx context.Context, c *rpcClient, opts globalOpts, args []string) error {
+func runOptions(ctx context.Context, c mcpClient, opts globalOpts, args []string) error {
 	fs := flag.NewFlagSet("options", flag.ContinueOnError)
 	ticker := fs.String("ticker", "", "Ticker")
 	days := fs.Int("days", 30, "Lookback days")
@@ -536,7 +690,7 @@ func runOptions(ctx context.Context, c *rpcClient, opts globalOpts, args []strin
 	})
 }
 
-func runETF(ctx context.Context, c *rpcClient, opts globalOpts, args []string) error {
+func runETF(ctx context.Context, c mcpClient, opts globalOpts, args []string) error {
 	fs := flag.NewFlagSet("etf", flag.ContinueOnError)
 	ticker := fs.String("ticker", "", "Optional ETF ticker")
 	days := fs.Int("days", 30, "Lookback days")
@@ -551,7 +705,7 @@ func runETF(ctx context.Context, c *rpcClient, opts globalOpts, args []string) e
 	return callAndPrint(ctx, c, opts, "query_etf_flow", params)
 }
 
-func runTechnicals(ctx context.Context, c *rpcClient, opts globalOpts, args []string) error {
+func runTechnicals(ctx context.Context, c mcpClient, opts globalOpts, args []string) error {
 	fs := flag.NewFlagSet("technicals", flag.ContinueOnError)
 	ticker := fs.String("ticker", "", "Ticker")
 	days := fs.Int("days", 7, "Lookback days")
@@ -568,7 +722,7 @@ func runTechnicals(ctx context.Context, c *rpcClient, opts globalOpts, args []st
 	})
 }
 
-func callAndPrint(ctx context.Context, c *rpcClient, opts globalOpts, tool string, params map[string]any) error {
+func callAndPrint(ctx context.Context, c mcpClient, opts globalOpts, tool string, params map[string]any) error {
 	var lastErr error
 	for i := 0; i <= opts.retries; i++ {
 		payload, rawResult, err := callTool(ctx, c, tool, params)
@@ -595,7 +749,7 @@ func callAndPrint(ctx context.Context, c *rpcClient, opts globalOpts, tool strin
 	return lastErr
 }
 
-func callTool(ctx context.Context, c *rpcClient, tool string, params map[string]any) (contractPayload, mcpToolCallResult, error) {
+func callTool(ctx context.Context, c mcpClient, tool string, params map[string]any) (contractPayload, mcpToolCallResult, error) {
 	callParams := map[string]any{
 		"name":      tool,
 		"arguments": params,
@@ -614,7 +768,7 @@ func callTool(ctx context.Context, c *rpcClient, tool string, params map[string]
 	return payload, result, nil
 }
 
-func printSummary(tool string, params map[string]any, payload contractPayload, raw mcpToolCallResult) {
+func printSummary(tool string, _ map[string]any, payload contractPayload, raw mcpToolCallResult) {
 	fmt.Printf("tool: %s\n", tool)
 	fmt.Printf("quality: %s\n", payload.Quality)
 	fmt.Printf("as_of: %s\n", payload.AsOf)
@@ -644,20 +798,75 @@ func hasErrorCode(payload contractPayload, code string) bool {
 	return false
 }
 
+func runSetup(args []string) error {
+	fs := flag.NewFlagSet("setup", flag.ContinueOnError)
+	serverURL := fs.String("server-url", "", "MCP HTTP endpoint URL")
+	serverCmd := fs.String("server-cmd", "", "MCP stdio server command")
+	fs.SetOutput(io.Discard)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if strings.TrimSpace(*serverURL) == "" && strings.TrimSpace(*serverCmd) == "" {
+		return errors.New("one of --server-url or --server-cmd is required")
+	}
+	if strings.TrimSpace(*serverURL) != "" && strings.TrimSpace(*serverCmd) != "" {
+		return errors.New("set only one: --server-url or --server-cmd")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	dir := filepath.Join(home, ".config", "rw")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	cfgPath := filepath.Join(dir, "config.env")
+	line := ""
+	if strings.TrimSpace(*serverURL) != "" {
+		line = "RW_MCP_SERVER_URL=\"" + strings.TrimSpace(*serverURL) + "\"\n"
+	}
+	if strings.TrimSpace(*serverCmd) != "" {
+		line = "RW_MCP_SERVER_CMD=\"" + strings.TrimSpace(*serverCmd) + "\"\n"
+	}
+	if err := os.WriteFile(cfgPath, []byte("# rw CLI config\n"+line), 0o644); err != nil {
+		return err
+	}
+	fmt.Printf("saved config: %s\n", cfgPath)
+	return nil
+}
+
+func runDoctor(opts globalOpts) error {
+	fmt.Println("rw doctor")
+	if opts.serverURL != "" {
+		fmt.Printf("transport: http\nserver_url: %s\n", opts.serverURL)
+		return nil
+	}
+	if opts.serverCmd != "" {
+		fmt.Printf("transport: stdio\nserver_cmd: %s\n", opts.serverCmd)
+		return nil
+	}
+	return errors.New("no server configured; run: rw setup --server-url <url> OR rw setup --server-cmd <cmd>")
+}
+
 func printHelp() {
-	fmt.Println(`rw - Go CLI for Research Warehouse MCP (stdio)
+	fmt.Println(`rw - Go CLI for Research Warehouse MCP
 
 Usage:
-  rw --server-cmd "python /path/to/mcp_server/server.py" <command> [options]
-  RW_MCP_SERVER_CMD="python /path/to/mcp_server/server.py" rw <command> [options]
+  rw setup --server-url <url>
+  rw setup --server-cmd "python /path/to/server.py"
+  rw doctor
+  rw <command> [options]
 
 Global flags:
-  --server-cmd <cmd>  MCP server command (or set RW_MCP_SERVER_CMD)
+  --server-url <url>  MCP HTTP endpoint (or RW_MCP_SERVER_URL)
+  --server-cmd <cmd>  MCP stdio command (or RW_MCP_SERVER_CMD)
   --timeout <sec>     Request timeout seconds (default: 30)
   --retries <n>       Retries on INTERNAL_ERROR (default: 1)
   --json              Print contract payload as JSON only
 
 Commands:
+  setup
+  doctor
   tools
   call --tool <name> --args '{"k":"v"}'
   company --ticker NVDA

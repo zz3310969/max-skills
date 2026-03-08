@@ -84,10 +84,11 @@ Each playbook defines:
 - Always include next actionable query when confidence is low.
 
 ## Command-Level Examples (`rw`)
-Assume:
+First configure once:
 
 ```bash
-export RW_MCP_SERVER_CMD="python /Users/zhengliangtian/Max/research-warehouse/mcp_server/server.py"
+rw setup --server-url https://your-mcp-gateway.example.com
+rw doctor
 ```
 
 ### 财报后异动归因

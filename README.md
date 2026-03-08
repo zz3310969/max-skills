@@ -6,6 +6,42 @@ A personal skills repository structured to work with:
 npx skills add <repo> --skill <name>
 ```
 
+## Quickstart (Out Of The Box)
+
+1. Install skills into your target project:
+
+```bash
+npx skills add https://github.com/zz3310969/max-skills --skill '*'
+```
+
+2. Install `rw` CLI:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/zz3310969/max-skills/main/scripts/install-rw.sh | bash
+```
+
+3. Point `rw` to your MCP endpoint (recommended HTTP mode):
+
+```bash
+rw setup --server-url https://your-mcp-gateway.example.com
+rw doctor
+rw tools
+```
+
+4. Run financial queries:
+
+```bash
+rw company --ticker NVDA
+rw macro --days 30
+rw semantic --query "CoWoS capacity expansion 2026" --limit 5
+```
+
+If you only have local stdio server:
+
+```bash
+rw setup --server-cmd "python /path/to/mcp_server/server.py"
+```
+
 ## Repository Structure
 
 ```text
@@ -16,6 +52,8 @@ scripts/
   create-skill.mjs
   list-skills.mjs
   validate-skills.mjs
+cli/
+  rw/
 ```
 
 `npx skills add` discovers skills by scanning for `SKILL.md` files and their frontmatter.
@@ -35,25 +73,19 @@ Shared MCP mapping reference:
 Location:
 - `cli/rw`
 
-Build:
+Build from source:
 
 ```bash
 cd cli/rw
 go build -o rw .
 ```
 
-Configure MCP server command:
-
-```bash
-export RW_MCP_SERVER_CMD="python /Users/zhengliangtian/Max/research-warehouse/mcp_server/server.py"
-```
-
 Examples:
 
 ```bash
+./rw doctor
 ./rw tools
 ./rw company --ticker NVDA
-./rw macro --days 30
 ./rw call --tool query_company --args '{"ticker":"NVDA"}'
 ```
 

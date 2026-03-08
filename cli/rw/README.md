@@ -1,32 +1,54 @@
 # rw CLI
 
-Go CLI wrapper for Research Warehouse MCP tools over stdio.
+Go CLI wrapper for Research Warehouse MCP tools.
 
-## Build
+Supports two transports:
+- HTTP endpoint (`RW_MCP_SERVER_URL`) for out-of-box usage
+- Local stdio command (`RW_MCP_SERVER_CMD`) for development
+
+## Install
+
+Recommended (no manual build):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/zz3310969/max-skills/main/scripts/install-rw.sh | bash
+```
+
+Or build from source:
 
 ```bash
 cd cli/rw
 go build -o rw .
 ```
 
-## Configure MCP Server
+## Configure
+
+HTTP mode (recommended):
 
 ```bash
-export RW_MCP_SERVER_CMD="python /Users/zhengliangtian/Max/research-warehouse/mcp_server/server.py"
+rw setup --server-url https://your-mcp-gateway.example.com
+rw doctor
 ```
 
-If your project uses a managed environment, point to that Python executable instead.
+Stdio mode:
+
+```bash
+rw setup --server-cmd "python /path/to/mcp_server/server.py"
+rw doctor
+```
+
+Config is stored at:
+- `~/.config/rw/config.env`
 
 ## Commands
 
 ```bash
-./rw tools
-./rw company --ticker NVDA
-./rw chain --entity NVDA --direction both --max-depth 3
-./rw macro --days 30
-./rw semantic --query "CoWoS capacity expansion 2026" --limit 5
-./rw call --tool query_company --args '{"ticker":"NVDA"}'
+rw tools
+rw company --ticker NVDA
+rw chain --entity NVDA --direction both --max-depth 3
+rw macro --days 30
+rw semantic --query "CoWoS capacity expansion 2026" --limit 5
+rw call --tool query_company --args '{"ticker":"NVDA"}'
 ```
 
-Output follows MCP response contract (`data/as_of/quality/source/errors`), and retries once on `INTERNAL_ERROR` by default.
-
+Output follows MCP response contract (`data/as_of/quality/source/errors`) and retries once on `INTERNAL_ERROR` by default.

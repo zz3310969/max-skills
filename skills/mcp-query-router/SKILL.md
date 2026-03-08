@@ -116,13 +116,11 @@ Then delegate final synthesis to `mcp-result-interpreter`.
 ## Tool Binding (Executable Entry)
 Use `rw` CLI as the concrete invocation layer.
 
-Prerequisite:
-- Set `RW_MCP_SERVER_CMD` to your MCP server command.
-
-Example:
+Recommended setup (HTTP MCP gateway):
 
 ```bash
-export RW_MCP_SERVER_CMD="python /Users/zhengliangtian/Max/research-warehouse/mcp_server/server.py"
+rw setup --server-url https://your-mcp-gateway.example.com
+rw doctor
 ```
 
 Then route intents with these commands:
