@@ -20,6 +20,16 @@ scripts/
 
 `npx skills add` discovers skills by scanning for `SKILL.md` files and their frontmatter.
 
+## Included Skills
+
+- `research-summary`
+- `mcp-query-router`
+- `mcp-result-interpreter`
+- `mcp-query-playbook`
+
+Shared MCP mapping reference:
+- `docs/mcp-tool-map.md`
+
 ## Skill Format
 
 Each skill should live in its own directory under `skills/` with a `SKILL.md`:
@@ -53,6 +63,12 @@ Validate skills:
 npm run skills:validate
 ```
 
+List skills in JSON:
+
+```bash
+npm run skills:list -- --json
+```
+
 ## Use From Any Project
 
 After pushing this repository to GitHub:
@@ -72,4 +88,3 @@ Preview discoverable skills without installing:
 ```bash
 npx skills add https://github.com/<your-org>/<your-repo> --list
 ```
-
