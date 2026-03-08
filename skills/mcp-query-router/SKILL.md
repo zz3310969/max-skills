@@ -113,3 +113,46 @@ Always hand over this normalized payload:
 
 Then delegate final synthesis to `mcp-result-interpreter`.
 
+## Tool Binding (Executable Entry)
+Use `rw` CLI as the concrete invocation layer.
+
+Prerequisite:
+- Set `RW_MCP_SERVER_CMD` to your MCP server command.
+
+Example:
+
+```bash
+export RW_MCP_SERVER_CMD="python /Users/zhengliangtian/Max/research-warehouse/mcp_server/server.py"
+```
+
+Then route intents with these commands:
+
+- Company snapshot:
+```bash
+rw company --ticker NVDA
+```
+
+- Supply chain:
+```bash
+rw chain --entity NVDA --direction both --max-depth 3
+```
+
+- Macro:
+```bash
+rw macro --days 30
+```
+
+- Semantic research:
+```bash
+rw semantic --query "CoWoS capacity expansion 2026" --limit 5
+```
+
+- Generic direct call:
+```bash
+rw call --tool query_company --args '{"ticker":"NVDA"}'
+```
+
+## Execution Notes
+1. Always run one primary command first.
+2. If `quality=partial`, execute one mapped fallback command.
+3. If `quality=error` with `INVALID_ARGUMENT`, repair params before retry.

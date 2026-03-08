@@ -30,6 +30,33 @@ scripts/
 Shared MCP mapping reference:
 - `docs/mcp-tool-map.md`
 
+## Go CLI (`rw`) For MCP Calls
+
+Location:
+- `cli/rw`
+
+Build:
+
+```bash
+cd cli/rw
+go build -o rw .
+```
+
+Configure MCP server command:
+
+```bash
+export RW_MCP_SERVER_CMD="python /Users/zhengliangtian/Max/research-warehouse/mcp_server/server.py"
+```
+
+Examples:
+
+```bash
+./rw tools
+./rw company --ticker NVDA
+./rw macro --days 30
+./rw call --tool query_company --args '{"ticker":"NVDA"}'
+```
+
 ## Skill Format
 
 Each skill should live in its own directory under `skills/` with a `SKILL.md`:

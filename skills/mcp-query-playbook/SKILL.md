@@ -83,3 +83,36 @@ Each playbook defines:
 - If evidence is cross-tool inconsistent, mark as unresolved.
 - Always include next actionable query when confidence is low.
 
+## Command-Level Examples (`rw`)
+Assume:
+
+```bash
+export RW_MCP_SERVER_CMD="python /Users/zhengliangtian/Max/research-warehouse/mcp_server/server.py"
+```
+
+### 财报后异动归因
+```bash
+rw earnings --ticker NVDA
+rw options --ticker NVDA --days 30
+rw technicals --ticker NVDA --days 7
+```
+
+### 产业链冲击传导
+```bash
+rw bottleneck --domain packaging
+rw chain --entity NVDA --direction both --max-depth 3
+rw company --ticker NVDA
+```
+
+### 宏观冲击行业
+```bash
+rw macro --days 30
+rw semantic --query "semiconductor demand under high rates" --limit 5
+```
+
+### 标的发现到深挖
+```bash
+rw search --sector photonics --tier chokepoint
+rw company --ticker LITE
+rw chain --entity LITE --direction upstream
+```

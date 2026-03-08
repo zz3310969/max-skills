@@ -76,3 +76,22 @@ When inferring across tools:
 - Prefix with `推断` and keep one sentence.
 - Tie inference back to explicit evidence fields.
 
+## Runtime Integration
+This interpreter consumes payloads returned by `rw` commands.
+
+Recommended invocation pattern:
+
+```bash
+rw company --ticker NVDA --json
+rw macro --days 30 --json
+```
+
+Interpreter input expectation:
+- A single contract payload with top-level fields:
+  - `data`
+  - `as_of`
+  - `quality`
+  - `source`
+  - `errors`
+
+If upstream output is not a valid contract payload, treat as transport failure and request retry.
