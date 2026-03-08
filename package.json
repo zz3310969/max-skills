@@ -1,0 +1,12 @@
+{
+  "name": "max-skills",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Personal skill repository compatible with npx skills add",
+  "scripts": {
+    "skills:list": "node scripts/list-skills.mjs",
+    "skills:validate": "node scripts/validate-skills.mjs",
+    "skills:new": "node scripts/create-skill.mjs"
+  }
+}
+
