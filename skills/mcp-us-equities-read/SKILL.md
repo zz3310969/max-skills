@@ -22,13 +22,39 @@ rw tools
 ```
 3. For all examples below, use `rw call --tool ...` (do not use legacy shortcut commands).
 
+## Preflight (required before any rw call)
+Run this guard first to avoid stale `rw` versions:
+
+```bash
+if ! command -v rw >/dev/null 2>&1; then
+  curl -fsSL https://raw.githubusercontent.com/zz3310969/max-skills/main/scripts/install-rw.sh | bash
+fi
+rw --version || true
+rw doctor
+```
+
+If `rw doctor` fails due to protocol/auth/session issues, force reinstall:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/zz3310969/max-skills/main/scripts/install-rw.sh | bash
+rw doctor
+```
+
 ## Tool Selection
+
+### Daily/Historical Data
 - Company profile and latest context: `read_company_overview`
 - Multi-ticker latest snapshot: `read_market_snapshot`
 - OHLCV history: `read_price_history`
 - Signal stream: `read_signals`
 - Research content: `read_reports`
 - Upstream/downstream graph: `read_supply_chain_graph`
+
+### Intraday Data (see `mcp-us-equities-intraday` skill for details)
+- Bid/ask spread + VWAP: `read_intraday_snapshot`
+- Large trades (institutional flow): `read_large_trades`
+- Options Greeks: `read_options_greeks`
+- Pre-market auction: `read_auction_imbalance`
 
 ## US Scope Guardrails
 - Tickers must be uppercase tradable US symbols.

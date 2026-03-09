@@ -14,11 +14,20 @@ npx skills add <repo> --skill <name>
 npx skills add https://github.com/zz3310969/max-skills --skill '*'
 ```
 
-2. Install `rw` CLI:
+2. Install or update `rw` CLI:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/zz3310969/max-skills/main/scripts/install-rw.sh | bash
 ```
+
+To update both skills and `rw` in one shot:
+
+```bash
+npx skills add https://github.com/zz3310969/max-skills --skill '*' && \
+curl -fsSL https://raw.githubusercontent.com/zz3310969/max-skills/main/scripts/install-rw.sh | bash
+```
+
+Note: `npx skills add` updates skill files, but does not auto-update the `rw` binary.
 
 3. Point `rw` to your MCP endpoint (recommended HTTP mode):
 
@@ -56,7 +65,7 @@ Install all skills:
 
 ```bash
 mkdir -p ~/.openclaw/workspace/skills
-for s in research-summary mcp-us-equities-read mcp-us-equities-ops mcp-us-equities-response; do
+for s in research-summary mcp-us-equities-read mcp-us-equities-intraday mcp-us-equities-ops mcp-us-equities-response; do
   mkdir -p ~/.openclaw/workspace/skills/$s
   curl -fsSL https://raw.githubusercontent.com/zz3310969/max-skills/main/skills/$s/SKILL.md \
     -o ~/.openclaw/workspace/skills/$s/SKILL.md
@@ -101,10 +110,11 @@ cli/
 
 ## Included Skills
 
-- `research-summary`
-- `mcp-us-equities-read`
-- `mcp-us-equities-ops`
-- `mcp-us-equities-response`
+- `research-summary` — Summarize technical research with action-oriented conclusions
+- `mcp-us-equities-read` — Daily/historical market data queries (company, price, signals, reports)
+- `mcp-us-equities-intraday` — Intraday data queries (quotes, VWAP, large trades, Greeks, auction)
+- `mcp-us-equities-ops` — Pipeline operations (list, run, track, health check)
+- `mcp-us-equities-response` — MCP v2 response envelope interpretation
 
 Shared MCP mapping reference:
 - `docs/mcp-tool-map-v2.md`

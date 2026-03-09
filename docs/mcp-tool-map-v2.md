@@ -54,6 +54,26 @@ Standard error codes:
 - Optional: `direction`, `max_depth`
 - Use for: graph nodes/edges around ticker
 
+### `read_intraday_snapshot`
+- Required: `tickers[]`
+- Optional: `include_quotes`, `include_bars`, `bar_interval` (`1Min|5Min|15Min|30Min`)
+- Use for: intraday bid/ask spread + VWAP + latest bars
+
+### `read_large_trades`
+- Required: `ticker`
+- Optional: `since`, `min_notional`, `limit`
+- Use for: institutional flow tracking (trades > $100K)
+
+### `read_options_greeks`
+- Required: `ticker`
+- Optional: `expiration`, `option_type`, `moneyness_range`, `limit`
+- Use for: ATM options Greeks (delta/gamma/theta/vega/IV)
+
+### `read_auction_imbalance`
+- Required: `tickers[]`
+- Optional: `date`
+- Use for: pre-market auction imbalance data
+
 ### `list_pipelines`
 - Required: none
 - Optional: `name_like`, `limit`

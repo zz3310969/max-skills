@@ -92,6 +92,16 @@ type contractPayload struct {
 		Message string         `json:"message"`
 		Details map[string]any `json:"details"`
 	} `json:"errors"`
+	OK   *bool `json:"ok"`
+	Meta struct {
+		AsOf   string   `json:"as_of"`
+		Source []string `json:"source"`
+	} `json:"meta"`
+	Error *struct {
+		Code    string         `json:"code"`
+		Message string         `json:"message"`
+		Details map[string]any `json:"details"`
+	} `json:"error"`
 }
 
 func main() {
@@ -846,16 +856,36 @@ func callTool(ctx context.Context, c mcpClient, tool string, params map[string]a
 }
 
 func printSummary(tool string, _ map[string]any, payload contractPayload, raw mcpToolCallResult) {
+	asOf := payload.AsOf
+	if asOf == "" {
+		asOf = payload.Meta.AsOf
+	}
+	source := payload.Source
+	if len(source) == 0 {
+		source = payload.Meta.Source
+	}
+	quality := payload.Quality
+	if quality == "" && payload.OK != nil {
+		if *payload.OK {
+			quality = "ok"
+		} else {
+			quality = "error"
+		}
+	}
+
 	fmt.Printf("tool: %s\n", tool)
-	fmt.Printf("quality: %s\n", payload.Quality)
-	fmt.Printf("as_of: %s\n", payload.AsOf)
-	fmt.Printf("source: %s\n", strings.Join(payload.Source, ", "))
-	if len(payload.Errors) == 0 {
+	fmt.Printf("quality: %s\n", quality)
+	fmt.Printf("as_of: %s\n", asOf)
+	fmt.Printf("source: %s\n", strings.Join(source, ", "))
+	if len(payload.Errors) == 0 && payload.Error == nil {
 		fmt.Println("errors: none")
 	} else {
 		fmt.Println("errors:")
 		for _, e := range payload.Errors {
 			fmt.Printf("  - %s: %s\n", e.Code, e.Message)
+		}
+		if payload.Error != nil {
+			fmt.Printf("  - %s: %s\n", payload.Error.Code, payload.Error.Message)
 		}
 	}
 	fmt.Println("data:")
@@ -867,6 +897,9 @@ func printSummary(tool string, _ map[string]any, payload contractPayload, raw mc
 }
 
 func hasErrorCode(payload contractPayload, code string) bool {
+	if payload.Error != nil && payload.Error.Code == code {
+		return true
+	}
 	for _, e := range payload.Errors {
 		if e.Code == code {
 			return true

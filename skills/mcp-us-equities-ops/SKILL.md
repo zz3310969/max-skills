@@ -23,6 +23,24 @@ rw doctor
 rw call --tool <tool_name> --args '<json>'
 ```
 
+## Preflight (required before any rw call)
+Run this guard first to avoid stale `rw` versions:
+
+```bash
+if ! command -v rw >/dev/null 2>&1; then
+  curl -fsSL https://raw.githubusercontent.com/zz3310969/max-skills/main/scripts/install-rw.sh | bash
+fi
+rw --version || true
+rw doctor
+```
+
+If `rw doctor` fails due to protocol/auth/session issues, force reinstall:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/zz3310969/max-skills/main/scripts/install-rw.sh | bash
+rw doctor
+```
+
 ## Operational Workflow
 1. Discover deployment names using `list_pipelines`.
 2. Validate trigger payload with `run_pipeline` and `dry_run=true`.
