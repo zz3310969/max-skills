@@ -31,9 +31,9 @@ rw tools
 4. Run financial queries:
 
 ```bash
-rw company --ticker NVDA
-rw macro --days 30
-rw semantic --query "CoWoS capacity expansion 2026" --limit 5
+rw call --tool read_company_overview --args '{"ticker":"NVDA"}'
+rw call --tool read_market_snapshot --args '{"tickers":["NVDA","AAPL"],"fields":["price","technicals"]}'
+rw call --tool read_reports --args '{"ticker":"NVDA","limit":20}'
 ```
 
 If you only have local stdio server:
@@ -50,7 +50,7 @@ Install all skills:
 
 ```bash
 mkdir -p ~/.openclaw/workspace/skills
-for s in mcp-query-playbook mcp-query-router mcp-result-interpreter research-summary; do
+for s in research-summary mcp-us-equities-read mcp-us-equities-ops mcp-us-equities-response; do
   mkdir -p ~/.openclaw/workspace/skills/$s
   curl -fsSL https://raw.githubusercontent.com/zz3310969/max-skills/main/skills/$s/SKILL.md \
     -o ~/.openclaw/workspace/skills/$s/SKILL.md
@@ -60,9 +60,9 @@ done
 Install one skill:
 
 ```bash
-mkdir -p ~/.openclaw/workspace/skills/mcp-query-router
-curl -fsSL https://raw.githubusercontent.com/zz3310969/max-skills/main/skills/mcp-query-router/SKILL.md \
-  -o ~/.openclaw/workspace/skills/mcp-query-router/SKILL.md
+mkdir -p ~/.openclaw/workspace/skills/mcp-us-equities-read
+curl -fsSL https://raw.githubusercontent.com/zz3310969/max-skills/main/skills/mcp-us-equities-read/SKILL.md \
+  -o ~/.openclaw/workspace/skills/mcp-us-equities-read/SKILL.md
 ```
 
 For MCP querying skills, also install `rw`:
@@ -90,24 +90,24 @@ cli/
 ## Included Skills
 
 - `research-summary`
-- `mcp-query-router`
-- `mcp-result-interpreter`
-- `mcp-query-playbook`
+- `mcp-us-equities-read`
+- `mcp-us-equities-ops`
+- `mcp-us-equities-response`
 
 Shared MCP mapping reference:
-- `docs/mcp-tool-map.md`
+- `docs/mcp-tool-map-v2.md`
 
 ## Skills Mode (Synced To MCP Source)
 
 This repo's MCP-related skills are synced against your MCP server docs:
 - query guide (tool names + parameters)
-- response contract (`quality/errors/source`)
+- response contract (`ok/data/meta/warnings/error`)
 
 When MCP source changes, update skill routing by this order:
 1. Query guide (tool names + parameters)
-2. Response contract (`quality/errors/source`)
-3. `docs/mcp-tool-map.md`
-4. `skills/mcp-query-router/SKILL.md` and `skills/mcp-query-playbook/SKILL.md`
+2. Response contract (`ok/data/meta/warnings/error`)
+3. `docs/mcp-tool-map-v2.md`
+4. `skills/mcp-us-equities-read/SKILL.md` and `skills/mcp-us-equities-ops/SKILL.md`
 
 ## Go CLI (`rw`) For MCP Calls
 
@@ -126,8 +126,8 @@ Examples:
 ```bash
 ./rw doctor
 ./rw tools
-./rw company --ticker NVDA
-./rw call --tool query_company --args '{"ticker":"NVDA"}'
+./rw call --tool read_company_overview --args '{"ticker":"NVDA"}'
+./rw call --tool read_market_snapshot --args '{"tickers":["NVDA","AAPL"],"fields":["price","technicals"]}'
 ```
 
 ## Skill Format
