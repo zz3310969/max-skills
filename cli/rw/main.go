@@ -49,6 +49,7 @@ type httpClient struct {
 	authToken string
 	client    *http.Client
 	nextID    int64
+	sessionID string
 }
 
 type rpcResponse struct {
@@ -269,7 +270,7 @@ func firstNonEmpty(a, b string) string {
 func newClient(ctx context.Context, opts globalOpts) (mcpClient, error) {
 	if opts.serverURL != "" {
 		return &httpClient{
-			url:       strings.TrimRight(opts.serverURL, "/"),
+			url:       strings.TrimSpace(opts.serverURL),
 			authToken: strings.TrimSpace(opts.authToken),
 			client: &http.Client{
 				Timeout: opts.timeout,
@@ -488,23 +489,81 @@ func (h *httpClient) post(ctx context.Context, payload any) (*rpcResponse, error
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if h.authToken != "" {
-		req.Header.Set("Authorization", "Bearer "+h.authToken)
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	if h.sessionID != "" {
+		req.Header.Set("mcp-session-id", h.sessionID)
 	}
+	h.applyAuthHeader(req)
 	res, err := h.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer res.Body.Close()
+	if sid := strings.TrimSpace(res.Header.Get("mcp-session-id")); sid != "" {
+		h.sessionID = sid
+	}
+	body, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		body, _ := io.ReadAll(io.LimitReader(res.Body, 2048))
 		return nil, fmt.Errorf("http %d: %s", res.StatusCode, strings.TrimSpace(string(body)))
 	}
 	var r rpcResponse
-	if err := json.NewDecoder(res.Body).Decode(&r); err != nil {
+	if err := decodeRPCBody(body, res.Header.Get("Content-Type"), &r); err != nil {
 		return nil, err
 	}
 	return &r, nil
+}
+
+func (h *httpClient) applyAuthHeader(req *http.Request) {
+	raw := strings.Trim(strings.TrimSpace(h.authToken), `"'`)
+	if raw == "" {
+		return
+	}
+	parts := strings.SplitN(raw, " ", 2)
+	if len(parts) == 2 {
+		scheme := strings.ToLower(strings.TrimSpace(parts[0]))
+		if scheme == "bearer" || scheme == "token" {
+			raw = strings.TrimSpace(parts[1])
+		}
+	}
+	if raw == "" {
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+raw)
+	req.Header.Set("X-Auth-Token", raw)
+}
+
+func decodeRPCBody(body []byte, contentType string, out *rpcResponse) error {
+	contentType = strings.ToLower(contentType)
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 {
+		return errors.New("empty response body")
+	}
+
+	// Normal MCP JSON response.
+	if strings.Contains(contentType, "application/json") || trimmed[0] == '{' || trimmed[0] == '[' {
+		return json.Unmarshal(trimmed, out)
+	}
+
+	// Streamable HTTP fallback: parse first `data: <json>` SSE frame.
+	if strings.Contains(contentType, "text/event-stream") || bytes.HasPrefix(trimmed, []byte("event:")) {
+		lines := strings.Split(string(trimmed), "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if !strings.HasPrefix(line, "data:") {
+				continue
+			}
+			payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+			if payload == "" {
+				continue
+			}
+			if err := json.Unmarshal([]byte(payload), out); err == nil {
+				return nil
+			}
+		}
+		return fmt.Errorf("failed to parse SSE response: %s", strings.TrimSpace(string(trimmed)))
+	}
+
+	return fmt.Errorf("unsupported response content-type %q: %s", contentType, strings.TrimSpace(string(trimmed)))
 }
 
 func runTools(ctx context.Context, c mcpClient) error {
