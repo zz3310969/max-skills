@@ -44,7 +44,13 @@ rw setup --server-cmd "node /path/to/mcp_server/server.js"
 
 ## OpenClaw Skill Install
 
-Install skills directly into OpenClaw (similar to jina-cli style):
+Use this path if you want to install skills directly into OpenClaw without `npx skills add`.
+
+Target directory:
+
+```bash
+~/.openclaw/workspace/skills/<skill-name>/SKILL.md
+```
 
 Install all skills:
 
@@ -57,7 +63,7 @@ for s in research-summary mcp-us-equities-read mcp-us-equities-ops mcp-us-equiti
 done
 ```
 
-Install one skill:
+Install one skill (`mcp-us-equities-read` example):
 
 ```bash
 mkdir -p ~/.openclaw/workspace/skills/mcp-us-equities-read
@@ -65,7 +71,13 @@ curl -fsSL https://raw.githubusercontent.com/zz3310969/max-skills/main/skills/mc
   -o ~/.openclaw/workspace/skills/mcp-us-equities-read/SKILL.md
 ```
 
-For MCP querying skills, also install `rw`:
+Verify installation:
+
+```bash
+find ~/.openclaw/workspace/skills -name SKILL.md
+```
+
+For MCP querying skills (`mcp-us-equities-read` / `mcp-us-equities-ops`), install `rw` too:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/zz3310969/max-skills/main/scripts/install-rw.sh | bash
