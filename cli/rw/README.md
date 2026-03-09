@@ -26,7 +26,7 @@ go build -o rw .
 HTTP mode (recommended):
 
 ```bash
-rw setup --server-url https://your-mcp-gateway.example.com
+rw setup --server-url https://your-mcp-gateway.example.com --auth-token <MCP_AUTH_TOKEN>
 rw doctor
 ```
 
@@ -52,3 +52,10 @@ rw call --tool query_company --args '{"ticker":"NVDA"}'
 ```
 
 Output follows MCP response contract (`data/as_of/quality/source/errors`) and retries once on `INTERNAL_ERROR` by default.
+
+You can also pass token via env var:
+
+```bash
+export RW_MCP_AUTH_TOKEN=<MCP_AUTH_TOKEN>
+rw --server-url https://your-mcp-gateway.example.com tools
+```

@@ -22,6 +22,7 @@ import (
 type globalOpts struct {
 	serverCmd string
 	serverURL string
+	authToken string
 	timeout   time.Duration
 	retries   int
 	jsonOnly  bool
@@ -44,9 +45,10 @@ type stdioClient struct {
 }
 
 type httpClient struct {
-	url    string
-	client *http.Client
-	nextID int64
+	url       string
+	authToken string
+	client    *http.Client
+	nextID    int64
 }
 
 type rpcResponse struct {
@@ -162,6 +164,7 @@ func parseGlobal(args []string) (globalOpts, string, []string, error) {
 			firstNonEmpty(strings.TrimSpace(os.Getenv("RW_MCP_SERVER_URL")), cfg["RW_MCP_SERVER_URL"]),
 			defaultMCPServerURL,
 		),
+		authToken: firstNonEmpty(strings.TrimSpace(os.Getenv("RW_MCP_AUTH_TOKEN")), cfg["RW_MCP_AUTH_TOKEN"]),
 		timeout:   30 * time.Second,
 		retries:   1,
 		jsonOnly:  false,
@@ -182,6 +185,12 @@ func parseGlobal(args []string) (globalOpts, string, []string, error) {
 				return opts, "", nil, errors.New("missing value for --server-url")
 			}
 			opts.serverURL = strings.TrimSpace(args[i+1])
+			i++
+		case "--auth-token":
+			if i+1 >= len(args) {
+				return opts, "", nil, errors.New("missing value for --auth-token")
+			}
+			opts.authToken = strings.TrimSpace(args[i+1])
 			i++
 		case "--timeout":
 			if i+1 >= len(args) {
@@ -260,7 +269,8 @@ func firstNonEmpty(a, b string) string {
 func newClient(ctx context.Context, opts globalOpts) (mcpClient, error) {
 	if opts.serverURL != "" {
 		return &httpClient{
-			url: strings.TrimRight(opts.serverURL, "/"),
+			url:       strings.TrimRight(opts.serverURL, "/"),
+			authToken: strings.TrimSpace(opts.authToken),
 			client: &http.Client{
 				Timeout: opts.timeout,
 			},
@@ -478,6 +488,9 @@ func (h *httpClient) post(ctx context.Context, payload any) (*rpcResponse, error
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if h.authToken != "" {
+		req.Header.Set("Authorization", "Bearer "+h.authToken)
+	}
 	res, err := h.client.Do(req)
 	if err != nil {
 		return nil, err
@@ -807,6 +820,7 @@ func runSetup(args []string) error {
 	fs := flag.NewFlagSet("setup", flag.ContinueOnError)
 	serverURL := fs.String("server-url", "", "MCP HTTP endpoint URL")
 	serverCmd := fs.String("server-cmd", "", "MCP stdio server command")
+	authToken := fs.String("auth-token", "", "Bearer token for MCP HTTP endpoint")
 	fs.SetOutput(io.Discard)
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -817,6 +831,7 @@ func runSetup(args []string) error {
 	if strings.TrimSpace(*serverURL) != "" && strings.TrimSpace(*serverCmd) != "" {
 		return errors.New("set only one: --server-url or --server-cmd")
 	}
+	prev := loadFileConfig()
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return err
@@ -833,6 +848,13 @@ func runSetup(args []string) error {
 	if strings.TrimSpace(*serverCmd) != "" {
 		line = "RW_MCP_SERVER_CMD=\"" + strings.TrimSpace(*serverCmd) + "\"\n"
 	}
+	token := strings.TrimSpace(*authToken)
+	if token == "" {
+		token = strings.TrimSpace(prev["RW_MCP_AUTH_TOKEN"])
+	}
+	if token != "" {
+		line += "RW_MCP_AUTH_TOKEN=\"" + token + "\"\n"
+	}
 	if err := os.WriteFile(cfgPath, []byte("# rw CLI config\n"+line), 0o644); err != nil {
 		return err
 	}
@@ -844,6 +866,11 @@ func runDoctor(opts globalOpts) error {
 	fmt.Println("rw doctor")
 	if opts.serverURL != "" {
 		fmt.Printf("transport: http\nserver_url: %s\n", opts.serverURL)
+		if strings.TrimSpace(opts.authToken) != "" {
+			fmt.Printf("auth_token: configured (%d chars)\n", len(strings.TrimSpace(opts.authToken)))
+		} else {
+			fmt.Println("auth_token: not set")
+		}
 		return nil
 	}
 	if opts.serverCmd != "" {
@@ -865,6 +892,7 @@ Usage:
 Global flags:
   --server-url <url>  MCP HTTP endpoint (or RW_MCP_SERVER_URL, default: http://113.44.56.214:18080/mcp/)
   --server-cmd <cmd>  MCP stdio command (or RW_MCP_SERVER_CMD)
+  --auth-token <tok>  MCP HTTP Bearer token (or RW_MCP_AUTH_TOKEN)
   --timeout <sec>     Request timeout seconds (default: 30)
   --retries <n>       Retries on INTERNAL_ERROR (default: 1)
   --json              Print contract payload as JSON only
