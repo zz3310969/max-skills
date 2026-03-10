@@ -792,11 +792,9 @@ func runOptions(ctx context.Context, c mcpClient, opts globalOpts, args []string
 		return errors.New("--days must be > 0")
 	}
 	normalized := strings.ToUpper(strings.TrimSpace(*ticker))
-	asOf := time.Now().UTC().AddDate(0, 0, -(*days)).Format(time.RFC3339)
 	return callAndPrint(ctx, c, opts, "read_market_snapshot", map[string]any{
 		"tickers": []string{normalized},
 		"fields":  []string{"options_flow"},
-		"as_of":   asOf,
 	})
 }
 
@@ -830,11 +828,9 @@ func runTechnicals(ctx context.Context, c mcpClient, opts globalOpts, args []str
 		return errors.New("--days must be > 0")
 	}
 	normalized := strings.ToUpper(strings.TrimSpace(*ticker))
-	asOf := time.Now().UTC().AddDate(0, 0, -(*days)).Format(time.RFC3339)
 	return callAndPrint(ctx, c, opts, "read_market_snapshot", map[string]any{
 		"tickers": []string{normalized},
 		"fields":  []string{"technicals"},
-		"as_of":   asOf,
 	})
 }
 
