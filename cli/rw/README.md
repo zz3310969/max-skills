@@ -48,7 +48,7 @@ rw company --ticker NVDA
 rw chain --entity NVDA --direction both --max-depth 3
 rw macro --days 30
 rw semantic --query "CoWoS capacity expansion 2026" --limit 5
-rw call --tool query_company --args '{"ticker":"NVDA"}'
+rw call --tool read_company_overview --args '{"ticker":"NVDA"}'
 ```
 
 Output follows MCP response contract (`data/as_of/quality/source/errors`) and retries once on `INTERNAL_ERROR` by default.

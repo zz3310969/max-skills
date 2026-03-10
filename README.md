@@ -123,11 +123,11 @@ Shared MCP mapping reference:
 
 This repo's MCP-related skills are synced against your MCP server docs:
 - query guide (tool names + parameters)
-- response contract (`ok/data/meta/warnings/error`)
+- response contract (`data/as_of/quality/source/errors`)
 
 When MCP source changes, update skill routing by this order:
 1. Query guide (tool names + parameters)
-2. Response contract (`ok/data/meta/warnings/error`)
+2. Response contract (`data/as_of/quality/source/errors`)
 3. `docs/mcp-tool-map-v2.md`
 4. `skills/mcp-us-equities-read/SKILL.md` and `skills/mcp-us-equities-ops/SKILL.md`
 
