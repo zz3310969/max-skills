@@ -622,10 +622,7 @@ func runCompany(ctx context.Context, c mcpClient, opts globalOpts, args []string
 		return errors.New("missing --ticker")
 	}
 	params := map[string]any{"ticker": strings.ToUpper(strings.TrimSpace(*ticker))}
-	return callAndPrintWithFallback(ctx, c, opts,
-		"read_company_overview", params,
-		"query_company", params,
-	)
+	return callAndPrint(ctx, c, opts, "read_company_overview", params)
 }
 
 func runChain(ctx context.Context, c mcpClient, opts globalOpts, args []string) error {
@@ -671,12 +668,12 @@ func runMacro(ctx context.Context, c mcpClient, opts globalOpts, args []string) 
 		return errors.New("--days must be > 0")
 	}
 	since := time.Now().UTC().AddDate(0, 0, -(*days)).Format(time.RFC3339)
-	return callAndPrintWithFallback(ctx, c, opts,
-		"read_signals",
-		map[string]any{"signal_type": "macro", "since": since, "order": "desc", "limit": 200},
-		"query_macro",
-		map[string]any{"days": *days},
-	)
+	return callAndPrint(ctx, c, opts, "read_signals", map[string]any{
+		"signal_type": "macro",
+		"since":       since,
+		"order":       "desc",
+		"limit":       200,
+	})
 }
 
 func runSearchCompanies(ctx context.Context, c mcpClient, opts globalOpts, args []string) error {
@@ -765,26 +762,19 @@ func runReports(ctx context.Context, c mcpClient, opts globalOpts, args []string
 	}
 	since := time.Now().UTC().AddDate(0, 0, -7*(*weeks)).Format(time.RFC3339)
 	newParams := map[string]any{"since": since, "limit": *limit, "order": "desc"}
-	legacyParams := map[string]any{"weeks": *weeks, "limit": *limit}
 	if *ticker != "" {
 		value := strings.ToUpper(strings.TrimSpace(*ticker))
 		newParams["ticker"] = value
-		legacyParams["ticker"] = value
 	}
 	if *topic != "" {
 		value := strings.TrimSpace(*topic)
 		newParams["topic"] = value
-		legacyParams["topic"] = value
 	}
 	if *source != "" {
 		value := strings.TrimSpace(*source)
 		newParams["sources"] = []string{value}
-		legacyParams["source"] = value
 	}
-	return callAndPrintWithFallback(ctx, c, opts,
-		"read_reports", newParams,
-		"get_research_reports", legacyParams,
-	)
+	return callAndPrint(ctx, c, opts, "read_reports", newParams)
 }
 
 func runOptions(ctx context.Context, c mcpClient, opts globalOpts, args []string) error {
@@ -798,13 +788,16 @@ func runOptions(ctx context.Context, c mcpClient, opts globalOpts, args []string
 	if *ticker == "" {
 		return errors.New("missing --ticker")
 	}
+	if *days <= 0 {
+		return errors.New("--days must be > 0")
+	}
 	normalized := strings.ToUpper(strings.TrimSpace(*ticker))
-	return callAndPrintWithFallback(ctx, c, opts,
-		"read_market_snapshot",
-		map[string]any{"tickers": []string{normalized}, "fields": []string{"options_flow"}},
-		"query_options_flow",
-		map[string]any{"ticker": normalized, "days": *days},
-	)
+	asOf := time.Now().UTC().AddDate(0, 0, -(*days)).Format(time.RFC3339)
+	return callAndPrint(ctx, c, opts, "read_market_snapshot", map[string]any{
+		"tickers": []string{normalized},
+		"fields":  []string{"options_flow"},
+		"as_of":   asOf,
+	})
 }
 
 func runETF(ctx context.Context, c mcpClient, opts globalOpts, args []string) error {
@@ -833,13 +826,16 @@ func runTechnicals(ctx context.Context, c mcpClient, opts globalOpts, args []str
 	if *ticker == "" {
 		return errors.New("missing --ticker")
 	}
+	if *days <= 0 {
+		return errors.New("--days must be > 0")
+	}
 	normalized := strings.ToUpper(strings.TrimSpace(*ticker))
-	return callAndPrintWithFallback(ctx, c, opts,
-		"read_market_snapshot",
-		map[string]any{"tickers": []string{normalized}, "fields": []string{"technicals"}},
-		"query_technicals",
-		map[string]any{"ticker": normalized, "days": *days},
-	)
+	asOf := time.Now().UTC().AddDate(0, 0, -(*days)).Format(time.RFC3339)
+	return callAndPrint(ctx, c, opts, "read_market_snapshot", map[string]any{
+		"tickers": []string{normalized},
+		"fields":  []string{"technicals"},
+		"as_of":   asOf,
+	})
 }
 
 func callAndPrint(ctx context.Context, c mcpClient, opts globalOpts, tool string, params map[string]any) error {
@@ -853,39 +849,6 @@ func callAndPrint(ctx context.Context, c mcpClient, opts globalOpts, tool string
 		return enc.Encode(payload)
 	}
 	printSummary(tool, params, payload, rawResult)
-	return nil
-}
-
-func callAndPrintWithFallback(
-	ctx context.Context,
-	c mcpClient,
-	opts globalOpts,
-	primaryTool string,
-	primaryParams map[string]any,
-	fallbackTool string,
-	fallbackParams map[string]any,
-) error {
-	payload, rawResult, err := callWithRetry(ctx, c, opts, primaryTool, primaryParams)
-	if err != nil {
-		return err
-	}
-	usedTool := primaryTool
-	usedParams := primaryParams
-	if fallbackTool != "" && isUnknownToolError(payload) {
-		fallbackPayload, fallbackRaw, fallbackErr := callWithRetry(ctx, c, opts, fallbackTool, fallbackParams)
-		if fallbackErr == nil {
-			payload = fallbackPayload
-			rawResult = fallbackRaw
-			usedTool = fallbackTool
-			usedParams = fallbackParams
-		}
-	}
-	if opts.jsonOnly {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(payload)
-	}
-	printSummary(usedTool, usedParams, payload, rawResult)
 	return nil
 }
 
@@ -991,28 +954,6 @@ func hasErrorCode(payload contractPayload, code string) bool {
 	}
 	for _, e := range payload.Errors {
 		if e.Code == code {
-			return true
-		}
-	}
-	return false
-}
-
-func isUnknownToolError(payload contractPayload) bool {
-	if payload.Quality != "error" {
-		return false
-	}
-	check := func(code string, message string) bool {
-		if code != "INVALID_INPUT" {
-			return false
-		}
-		msg := strings.ToLower(message)
-		return strings.Contains(msg, "未知工具") || strings.Contains(msg, "unknown tool")
-	}
-	if payload.Error != nil && check(payload.Error.Code, payload.Error.Message) {
-		return true
-	}
-	for _, e := range payload.Errors {
-		if check(e.Code, e.Message) {
 			return true
 		}
 	}
